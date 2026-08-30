@@ -7,7 +7,7 @@ PLUGIN.name = "mingw"
 --- Plugin version
 PLUGIN.version = "0.1.0"
 --- Plugin repository
-PLUGIN.homepage = "https://github.com/YOUR_USERNAME/vfox-mingw"
+PLUGIN.homepage = "https://github.com/qfbsk/vfox-mingw"
 --- Plugin license
 PLUGIN.license = "MIT"
 --- Plugin description
