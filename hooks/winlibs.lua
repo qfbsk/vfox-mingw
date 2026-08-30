@@ -68,19 +68,29 @@ end
 
 function M.parseReleasesAtom(body)
     local result = {}
-    -- Normalize whitespace so multi-line XML entries become single-line patterns.
-    local flat = string.gsub(body, "%s+", " ")
+    local start = 1
 
-    for entry in string.gmatch(flat, "<entry[^>]*>(.-)</entry>") do
+    while true do
+        local s, e = string.find(body, "<entry>", start, true)
+        if not s then break end
+        local se, ee = string.find(body, "</entry>", e + 1, true)
+        if not se then break end
+
+        local entry = string.sub(body, e + 1, se - 1)
+        start = ee + 1
+
+        -- Extract within the single entry; these tags are usually on one line.
         local title = string.match(entry, "<title[^>]*>(.-)</title>")
         local link = string.match(entry, "<link[^>]+href=[\"']([^\"']+)[\"'][^>]*/>")
         if title and link then
+            title = M.trim(title)
+            link = M.trim(link)
             local lower = string.lower(title)
             if not (string.find(lower, "llvm", 1, true) or string.find(lower, "clang", 1, true) or string.find(lower, "lld", 1, true)) then
-                local tag = string.match(link, "/releases/tag/([^\"'/]+)")
+                local tag = string.match(link, "/releases/tag/([^\"'/ ]+)")
                 if tag then
                     -- e.g. 16.2.0posix-14.0.0-ucrt-r1
-                    local gcc, mingw, runtime, rev = string.match(tag, "^(\d+%.\d+%.\d+)posix%-(\d+%.\d+%.\d+)%-(ucrt)%-r(\d+)$")
+                    local gcc, mingw, runtime, rev = string.match(tag, "^(%d+%.%d+%.%d+)posix%-(%d+%.%d+%.%d+)%-(ucrt)%-r(%d+)$")
                     if gcc and runtime == "ucrt" then
                         table.insert(result, {
                             version = gcc,
@@ -97,7 +107,16 @@ function M.parseReleasesAtom(body)
     end
 
     table.sort(result, function(a, b) return a.version > b.version end)
-    return result
+
+    local seen = {}
+    local deduped = {}
+    for _, item in ipairs(result) do
+        if not seen[item.version] then
+            seen[item.version] = true
+            table.insert(deduped, item)
+        end
+    end
+    return deduped
 end
 
 function M.parseWinlibsHtml(body)
@@ -106,7 +125,7 @@ function M.parseWinlibsHtml(body)
 
     for url in string.gmatch(flat, "(https://github%.com/brechtsanders/winlibs_mingw/releases/download/[^\"'<>%s]+/winlibs%-x86_64%-posix%-seh%-gcc%-[^\"'<>%s]-%.zip)") do
         if not string.find(url, "llvm", 1, true) then
-            local tag, gcc, runtime, mingw, rev = string.match(url, "/releases/download/([%w%.%-]+)/winlibs%-x86_64%-posix%-seh%-gcc%-(\d+%.\d+%.\d+)%-mingw%-w64(ucrt)%-(\d+%.\d+%.\d+)%-r(\d+)%.zip$")
+            local tag, gcc, runtime, mingw, rev = string.match(url, "/releases/download/([%w%.%-]+)/winlibs%-x86_64%-posix%-seh%-gcc%-(%d+%.%d+%.%d+)%-mingw%-w64(ucrt)%-(%d+%.%d+%.%d+)%-r(%d+)%.zip$")
             if tag and gcc and runtime == "ucrt" then
                 table.insert(result, {
                     version = gcc,

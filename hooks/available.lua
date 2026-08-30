@@ -1,4 +1,4 @@
-local W = require("lib.winlibs")
+local W = require("winlibs")
 
 --- Return all available versions provided by this plugin.
 --- Fetches the WinLibs releases at runtime and lists the pure GNU (without LLVM) builds.

@@ -1,4 +1,4 @@
-local W = require("lib.winlibs")
+local W = require("winlibs")
 
 --- Returns pre-install information: the exact download URL for the chosen version.
 --- vfox downloads and extracts the zip automatically (zip is a supported archive).
