@@ -5,7 +5,7 @@ PLUGIN = {}
 --- Plugin name (used as: vfox add mingw / vfox install mingw@x.y.z)
 PLUGIN.name = "mingw"
 --- Plugin version
-PLUGIN.version = "0.1.0"
+PLUGIN.version = "0.1.1"
 --- Plugin repository
 PLUGIN.homepage = "https://github.com/qfbsk/vfox-mingw"
 --- Plugin license
