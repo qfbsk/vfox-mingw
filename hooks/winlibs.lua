@@ -55,15 +55,33 @@ function M.applyMirror(url)
     return M.transformGitHubURL(mirror, url)
 end
 
-function M.httpGet(url)
-    local resp, err = http.get({
-        url = url,
-        headers = {
-            ["User-Agent"] = "vfox-mingw",
-            ["Accept"] = "application/atom+xml,application/xhtml+xml,text/html,application/xml;q=0.9,*/*;q=0.8"
-        }
-    })
-    return resp, err
+function M.httpGet(url, opts)
+    opts = opts or {}
+    local retries = opts.retries or 3
+    local lastErr
+    for attempt = 1, retries do
+        local resp, err = http.get({
+            url = url,
+            headers = {
+                ["User-Agent"] = "vfox-mingw",
+                ["Accept"] = "application/atom+xml,application/xhtml+xml,text/html,application/xml;q=0.9,*/*;q=0.8"
+            }
+        })
+        if resp and resp.status_code == 200 then
+            return resp, nil
+        end
+        lastErr = err or (resp and ("HTTP " .. tostring(resp.status_code)) or "empty response")
+        -- Retry only on transient failures: connection error, or 502/503/429.
+        local retryable = (err ~= nil) or (resp and (resp.status_code == 502 or resp.status_code == 503 or resp.status_code == 429))
+        if not retryable then
+            break
+        end
+        if attempt < retries then
+            -- Windows-only brief backoff between retries.
+            pcall(function() os.execute("timeout /t 2 /nobreak >nul 2>&1") end)
+        end
+    end
+    return nil, lastErr
 end
 
 function M.parseReleasesAtom(body)
@@ -156,27 +174,30 @@ end
 function M.fetchReleaseList()
     -- Primary: GitHub releases.atom (no API key, usually mirror-friendly)
     local atomUrl = M.applyMirror(M.WINLIBS_ATOM)
-    local resp, err = M.httpGet(atomUrl)
+    local resp, err = M.httpGet(atomUrl, { retries = 3 })
     if resp and resp.status_code == 200 then
         local list = M.parseReleasesAtom(resp.body)
         if #list > 0 then
             return list, nil
         end
     end
-
-    local lastErr = err or (resp and "atom feed status " .. tostring(resp.status_code)) or "atom feed empty"
+    local atomErr = err or (resp and ("HTTP " .. tostring(resp.status_code) .. " (no versions parsed)") or "empty response")
 
     -- Fallback: winlibs.com homepage HTML
     local homeUrl = M.applyMirror(M.WINLIBS_HOME)
-    local resp2, err2 = M.httpGet(homeUrl)
+    local resp2, err2 = M.httpGet(homeUrl, { retries = 3 })
     if resp2 and resp2.status_code == 200 then
         local list = M.parseWinlibsHtml(resp2.body)
         if #list > 0 then
             return list, nil
         end
     end
+    local homeErr = err2 or (resp2 and ("HTTP " .. tostring(resp2.status_code) .. " (no versions parsed)") or "empty response")
 
-    return nil, "failed to fetch WinLibs versions from both atom feed and winlibs.com: " .. tostring(lastErr) .. " ; " .. tostring(err2 or "unknown")
+    return nil, "无法获取 WinLibs 版本列表（已重试 3 次）：\n" ..
+        "  - atom feed (" .. atomUrl .. "): " .. tostring(atomErr) .. "\n" ..
+        "  - winlibs.com (" .. homeUrl .. "): " .. tostring(homeErr) .. "\n" ..
+        "请检查网络后重试；如已配置 GitHub 加速源，请确认该镜像当前可用。"
 end
 
 function M.buildDownloadURL(item)
